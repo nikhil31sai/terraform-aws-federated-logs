@@ -112,7 +112,7 @@ resource "aws_iam_role" "reader-role" {
       Action = "sts:AssumeRole"
       Condition = {
         StringEquals = {
-          "sts:ExternalId" = local.nr_assume_role_external_id
+          "sts:ExternalId" = newrelic_aws_connection.query_connection.credential[0].assume_role[0].external_id
         }
       }
     }]
@@ -246,9 +246,14 @@ resource "aws_iam_role_policy_attachment" "writer_attach" {
   policy_arn = aws_iam_policy.writer_policy.arn
 }
 
+# Bumping local.query_connection_generation replaces the query connection, which gets a new external ID.
+resource "terraform_data" "query_connection_generation" {
+  input = local.query_connection_generation
+}
+
 # Per-setup AWS Connection entity wrapping the reader role.
 resource "newrelic_aws_connection" "query_connection" {
-  name        = "${local.setup_naming_prefix}-query-aws-connection"
+  name        = "${local.setup_naming_prefix}-query-connection-${local.query_connection_generation}"
   description = var.query_connection_description
 
   scope_type = "ORGANIZATION"
@@ -256,9 +261,15 @@ resource "newrelic_aws_connection" "query_connection" {
 
   credential {
     assume_role {
-      role_arn    = aws_iam_role.reader-role.arn
-      external_id = local.nr_assume_role_external_id
+      # Built as a string so the role's trust policy can depend on this connection's external ID.
+      role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.setup_naming_prefix}-${local.nr_reader_role_suffix}"
     }
+  }
+
+  lifecycle {
+    # The replacement must exist before the setup and trust policy move to it; the old one is destroyed last.
+    create_before_destroy = true
+    replace_triggered_by  = [terraform_data.query_connection_generation]
   }
 }
 

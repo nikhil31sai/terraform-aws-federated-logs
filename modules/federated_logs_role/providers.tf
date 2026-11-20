@@ -10,8 +10,9 @@ terraform {
       version = ">= 2.0"
     }
     newrelic = {
-      source  = "newrelic/newrelic"
-      version = ">= 3.91.0"
+      source = "newrelic/newrelic"
+      # First release with a computed credential.assume_role.external_id; update if it ships under another version.
+      version = ">= 3.103.0"
     }
   }
 }
